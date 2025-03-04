@@ -1,28 +1,31 @@
+import os
+import logging
 import qutip as qt
 from qutip.qip.circuit import QubitCircuit
 from flask import Flask, request, send_file, render_template
 import matplotlib
-import logging
-mpl_logger = logging.getLogger('matplotlib')
-mpl_logger.setLevel(logging.WARNING)  # Suppress Matplotlib debug logs so that it wont show the warnings
-matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
-import os
-import logging
 
+
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+matplotlib.use('Agg')
+
+#Setting up the flash app here,this is like this takes input from frontend and gives that to backent to process throught it to give a result,which is then given back to frontend 
 app = Flask(__name__)
 
-# Set up logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 @app.route('/')
 def home():
     return render_template("index.html")
 
+
 @app.route('/generate_circuit', methods=['POST'])
 def generate_circuit():
     data = request.json
-    logging.debug(f"Received data: {data}")
+    logging.debug(f"[Request] Received data: {data}")
 
     if not data:
         return {"error": "No data received"}, 400
@@ -31,120 +34,76 @@ def generate_circuit():
         qubit_number = int(data["qubitNumber"])
         layers = data["layers"]
 
-        logging.debug(f"Creating circuit with {qubit_number} qubits.")
+        logging.info(f"Initializing quantum circuit with {qubit_number} qubits.")
         qc = QubitCircuit(qubit_number)
 
-       #Layers and details for each gate
-        for layer in layers:
+        for layer_idx, layer in enumerate(layers):
             gate = layer["gate"].upper()
+            logging.debug(f"[Layer {layer_idx}] Processing gate: {gate}")
 
             if gate == "CNOT":
-                if "controlQubit" not in layer or "targetQubit" not in layer:
-                    return {"error": "CNOT gate requires controlQubit and targetQubit"}, 400
-
-                try:
-                    control = int(layer["controlQubit"])
-                    target = int(layer["targetQubit"])
-                except (ValueError, KeyError):
-                    return {"error": "Invalid control or target qubit value for CNOT gate"}, 400
+                control = int(layer["controlQubit"])
+                target = int(layer["targetQubit"])
 
                 if control == target:
-                    return {"error": "Control and target qubit must be different for CNOT"}, 400
-                if control >= qubit_number or target >= qubit_number:
-                    return {"error": f"Qubit index out of range. Valid range: 0 to {qubit_number - 1}"}, 400
+                    return {"error": "Control and target qubits must differ for CNOT."}, 400
 
-                logging.debug(f"Adding CNOT gate: control={control}, target={target}")
                 qc.add_gate("CNOT", targets=[target], controls=[control])
+                logging.info(f"Added CNOT gate (control={control}, target={target})")
 
             elif gate == "SWAP":
-                if "qubit1" not in layer or "qubit2" not in layer:
-                    return {"error": "SWAP gate requires qubit1 and qubit2"}, 400
+                qubit1 = int(layer["qubit1"])
+                qubit2 = int(layer["qubit2"])
 
-                try:
-                    qubit1 = int(layer["qubit1"])
-                    qubit2 = int(layer["qubit2"])
-                except (ValueError, KeyError):
-                    return {"error": "Invalid qubit1 or qubit2 value for SWAP gate"}, 400
-
-                if qubit1 >= qubit_number or qubit2 >= qubit_number:
-                    return {"error": f"Qubit index out of range. Valid range: 0 to {qubit_number - 1}"}, 400
-
-                logging.debug(f"Adding SWAP gate: qubit1={qubit1}, qubit2={qubit2}")
                 qc.add_gate("SWAP", targets=[qubit1, qubit2])
+                logging.info(f"Added SWAP gate between qubit {qubit1} and qubit {qubit2}")
 
             elif gate == "CZ":
-                if "controlQubit" not in layer or "targetQubit" not in layer:
-                    return {"error": "CZ gate requires controlQubit and targetQubit"}, 400
-
-                try:
-                    control = int(layer["controlQubit"])
-                    target = int(layer["targetQubit"])
-                except (ValueError, KeyError):
-                    return {"error": "Invalid control or target qubit value for CZ gate"}, 400
+                control = int(layer["controlQubit"])
+                target = int(layer["targetQubit"])
 
                 if control == target:
-                    return {"error": "Control and target qubit must be different for CZ"}, 400
-                if control >= qubit_number or target >= qubit_number:
-                    return {"error": f"Qubit index out of range. Valid range: 0 to {qubit_number - 1}"}, 400
+                    return {"error": "Control and target qubits must differ for CZ."}, 400
 
-                logging.debug(f"Adding CZ gate: control={control}, target={target}")
                 qc.add_gate("CZ", targets=[target], controls=[control])
+                logging.info(f"Added CZ gate (control={control}, target={target})")
 
             elif gate == "MEASURE":
-                if "qubit" not in layer:
-                    return {"error": "Measurement gate requires qubit"}, 400
-
-                try:
-                    qubit = int(layer["qubit"])
-                except (ValueError, KeyError):
-                    return {"error": "Invalid qubit value for Measurement gate"}, 400
-
-                if qubit >= qubit_number:
-                    return {"error": f"Qubit index out of range. Valid range: 0 to {qubit_number - 1}"}, 400
-
-                logging.debug(f"Adding MEASURE gate: qubit={qubit}")
+                qubit = int(layer["qubit"])
                 qc.add_gate("MEASURE", targets=[qubit])
+                logging.info(f"Added MEASURE gate on qubit {qubit}")
 
             else:
-                if "qubit" not in layer:
-                    return {"error": f"Gate {gate} requires qubit"}, 400
-
-                try:
-                    qubit = int(layer["qubit"])
-                except (ValueError, KeyError):
-                    return {"error": f"Invalid qubit value for {gate} gate"}, 400
-
-                if qubit >= qubit_number:
-                    return {"error": f"Qubit index out of range. Valid range: 0 to {qubit_number - 1}"}, 400
-
-                logging.debug(f"Adding {gate} gate: qubit={qubit}")
+                qubit = int(layer["qubit"])
                 if gate == "H":
-                    qc.add_gate("SNOT", targets=[qubit])  # SNOT is Hadamard in QuTiP
+                    qc.add_gate("SNOT", targets=[qubit])
+                    logging.info(f"Added Hadamard (SNOT) gate on qubit {qubit}")
                 elif gate in ["X", "Y", "Z", "T", "S"]:
                     qc.add_gate(gate, targets=[qubit])
+                    logging.info(f"Added {gate} gate on qubit {qubit}")
                 else:
-                    return {"error": f"Invalid gate: {gate}"}, 400
+                    return {"error": f"Unsupported gate: {gate}"}, 400
 
-        logging.debug("Circuit created successfully.")
-
-        # Saving the circuit visualization here:
+        # This is bascially to store the output image
         os.makedirs("static", exist_ok=True)
         filename = "static/circuit.jpg"
 
-        # To Draw the circuit and save it as an image we use qc.draw() method from QuTiP
-        fig, ax = plt.subplots(figsize=(10, 4))
+        #CIRCUIT DRAWER
+        logging.info("Rendering the quantum circuit diagram.")
+        fig, ax = plt.subplots(figsize=(12, 4))
         qc.draw(ax=ax)
         plt.savefig(filename, format='jpg', bbox_inches='tight')
         plt.close()
+        logging.info(f"Circuit diagram saved to '{filename}'")
 
-        logging.debug(f"File saved: {filename}")
-
-        # It should return the file:
         return send_file(filename, mimetype='image/jpeg')
 
     except Exception as e:
-        logging.error(f"Error generating circuit: {e}")
+        logging.error(f"Unexpected error during circuit generation: {e}")
         return {"error": f"An error occurred: {str(e)}"}, 500
 
+
 if __name__ == '__main__':
+    # Here we can access the quantum circuit visualiser:click down
+    logging.info("Quantum circuit service running at http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=True)

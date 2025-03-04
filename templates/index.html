@@ -10,7 +10,7 @@
             margin: 20px;
         }
         h1 {
-            color: #333;
+            color: #de0f0f;
         }
         form {
             margin-bottom: 20px;
@@ -26,13 +26,13 @@
             max-width: 300px;
         }
         button {
-            background-color: #007bff;
+            background-color: #0a4584;
             color: white;
             border: none;
             cursor: pointer;
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: #114b88;
         }
         #circuitImage {
             max-width: 100%;
@@ -44,7 +44,7 @@
             text-decoration: none;
         }
         .error {
-            color: red;
+            color: rgb(136, 105, 105);
             margin-top: 10px;
         }
         .hidden {
@@ -128,29 +128,24 @@
                 <br><br>
             `;
             document.getElementById('layers').appendChild(layerDiv);
-
-            // Call handleGateChange to show the correct input fields
+ 
             const gateSelect = layerDiv.querySelector('.gateSelect');
             handleGateChange(gateSelect);
         }
-
         function handleGateChange(selectElement) {
             const layerDiv = selectElement.closest('.layer');
             const qubitSelection = layerDiv.querySelector('.qubitSelection');
             const cnotSelection = layerDiv.querySelector('.cnotSelection');
             const swapSelection = layerDiv.querySelector('.swapSelection');
             const czSelection = layerDiv.querySelector('.czSelection');
-            const measureSelection = layerDiv.querySelector('.measureSelection');
-
-            // Hide all selections initially or it will show all for each layer
+            const measureSelection = layerDiv.querySelector('.measureSelection');   
             qubitSelection.classList.add('hidden');
             cnotSelection.classList.add('hidden');
             swapSelection.classList.add('hidden');
             czSelection.classList.add('hidden');
             measureSelection.classList.add('hidden');
             layerDiv.querySelectorAll('input').forEach(input => input.value = '');
-
-            // Show the relevant selection (that could be done here)
+ 
             if (selectElement.value === "CNOT") {
                 cnotSelection.classList.remove('hidden');
             } else if (selectElement.value === "SWAP") {
@@ -160,11 +155,10 @@
             } else if (selectElement.value === "MEASURE") {
                 measureSelection.classList.remove('hidden');
             } else {
-                // Single-qubit gates (X, Y, Z, H)
+                
                 qubitSelection.classList.remove('hidden');
             }
         }
-
         document.getElementById('circuitForm').onsubmit = async (e) => {
             e.preventDefault();
             document.getElementById('errorMessage').textContent = '';
@@ -174,13 +168,11 @@
                 document.getElementById('errorMessage').textContent = "Number of qubits must be a positive integer.";
                 return;
             }
-
             const layers = document.querySelectorAll('#layers .layer');
             const data = {
                 qubitNumber,
                 layers: []
             };
-
             let isValid = true;
 
             layers.forEach(layer => {
@@ -253,8 +245,7 @@
                     } else {
                         data.layers.push({ gate, qubit });
                     }
-                } else {
-                    // Single-qubit gates (X, Y, Z, H)
+                } else {     
                     const qubit = parseInt(layer.querySelector('.qubitInput').value);
 
                     if (isNaN(qubit)) {
@@ -268,15 +259,11 @@
                     }
                 }
             });
-
             console.log("Validation Check:", isValid);
             if (!isValid) {
                 return;
             }
-
-            // Log the form data being sent to the backend
             console.log("Form Data Sent:", JSON.stringify(data, null, 2));
-
             try {
                 const response = await fetch('/generate_circuit', {
                     method: 'POST',
@@ -287,16 +274,13 @@
                 if (response.ok) {
                     const blob = await response.blob();
                     const imgURL = URL.createObjectURL(blob);
-
                     document.getElementById("circuitImage")?.remove();
                     document.getElementById("downloadButton")?.remove();
-
                     const img = document.createElement("img");
                     img.id = "circuitImage";
                     img.src = imgURL;
                     img.style.maxWidth = "100%";
                     document.body.appendChild(img);
-
                     const downloadBtn = document.createElement("a");
                     downloadBtn.id = "downloadButton";
                     downloadBtn.href = imgURL;
