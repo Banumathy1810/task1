@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Circuit Visualizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+        input, select, button {
+            padding: 8px;
+            margin: 5px 0;
+            width: 100%;
+            max-width: 300px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #circuitImage {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        #downloadButton {
+            display: inline-block;
+            margin-top: 10px;
+            text-decoration: none;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Quantum Circuit Visualizer</h1>
+    <form id="circuitForm" novalidate>
+        <label for="qubitNumber">Number of Qubits:</label>
+        <input type="number" id="qubitNumber" name="qubitNumber" min="1" required><br><br>
+
+        <div id="layers">
+            <!-- Layers will be dynamically added here -->
+        </div>
+
+        <button type="button" onclick="addLayer()">Add Layer</button><br><br>
+        <button id="generateCircuitButton" type="submit">Generate Circuit</button>
+    </form>
+
+    <div id="errorMessage" class="error"></div>
+
+    <script>
+        function addLayer() {
+            const layerIndex = document.querySelectorAll('#layers .layer').length + 1;
+            const layerDiv = document.createElement('div');
+            layerDiv.className = "layer";
+            layerDiv.innerHTML = `
+                <h3>Layer ${layerIndex}</h3>
+                <label>Select Gate:</label>
+                <select name="gate" class="gateSelect" required onchange="handleGateChange(this)">
+                    <option value="X">X Gate</option>
+                    <option value="Y">Y Gate</option>
+                    <option value="Z">Z Gate</option>
+                    <option value="H">Hadamard Gate</option>
+                    <option value="CNOT">CNOT Gate</option>
+                    <option value="SWAP">SWAP Gate</option>
+                    <option value="CZ">CZ Gate</option>
+                    <option value="MEASURE">Measurement Gate</option>
+                </select><br>
+
+                <!-- Single Qubit Input -->
+                <div class="qubitSelection hidden">
+                    <label>Select Qubit:</label>
+                    <input type="number" name="qubit" class="qubitInput" min="0">
+                </div>
+
+                <!-- CNOT Inputs -->
+                <div class="cnotSelection hidden">
+                    <label>Control Qubit:</label>
+                    <input type="number" name="controlQubit" class="controlQubitInput" min="0">
+
+                    <label>Target Qubit:</label>
+                    <input type="number" name="targetQubit" class="targetQubitInput" min="0">
+                </div>
+
+                <!-- SWAP Inputs -->
+                <div class="swapSelection hidden">
+                    <label>Qubit 1:</label>
+                    <input type="number" name="qubit1" class="qubit1Input" min="0">
+
+                    <label>Qubit 2:</label>
+                    <input type="number" name="qubit2" class="qubit2Input" min="0">
+                </div>
+
+                <!-- CZ Inputs -->
+                <div class="czSelection hidden">
+                    <label>Control Qubit:</label>
+                    <input type="number" name="controlQubit" class="controlQubitInput" min="0">
+
+                    <label>Target Qubit:</label>
+                    <input type="number" name="targetQubit" class="targetQubitInput" min="0">
+                </div>
+
+                <!-- Measurement Input -->
+                <div class="measureSelection hidden">
+                    <label>Qubit to Measure:</label>
+                    <input type="number" name="qubit" class="qubitInput" min="0">
+                </div>
+                <br><br>
+            `;
+            document.getElementById('layers').appendChild(layerDiv);
+
+            // Call handleGateChange to show the correct input fields
+            const gateSelect = layerDiv.querySelector('.gateSelect');
+            handleGateChange(gateSelect);
+        }
+
+        function handleGateChange(selectElement) {
+            const layerDiv = selectElement.closest('.layer');
+            const qubitSelection = layerDiv.querySelector('.qubitSelection');
+            const cnotSelection = layerDiv.querySelector('.cnotSelection');
+            const swapSelection = layerDiv.querySelector('.swapSelection');
+            const czSelection = layerDiv.querySelector('.czSelection');
+            const measureSelection = layerDiv.querySelector('.measureSelection');
+
+            // Hide all selections initially or it will show all for each layer
+            qubitSelection.classList.add('hidden');
+            cnotSelection.classList.add('hidden');
+            swapSelection.classList.add('hidden');
+            czSelection.classList.add('hidden');
+            measureSelection.classList.add('hidden');
+            layerDiv.querySelectorAll('input').forEach(input => input.value = '');
+
+            // Show the relevant selection (that could be done here)
+            if (selectElement.value === "CNOT") {
+                cnotSelection.classList.remove('hidden');
+            } else if (selectElement.value === "SWAP") {
+                swapSelection.classList.remove('hidden');
+            } else if (selectElement.value === "CZ") {
+                czSelection.classList.remove('hidden');
+            } else if (selectElement.value === "MEASURE") {
+                measureSelection.classList.remove('hidden');
+            } else {
+                // Single-qubit gates (X, Y, Z, H)
+                qubitSelection.classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('circuitForm').onsubmit = async (e) => {
+            e.preventDefault();
+            document.getElementById('errorMessage').textContent = '';
+
+            const qubitNumber = parseInt(document.getElementById('qubitNumber').value);
+            if (isNaN(qubitNumber) || qubitNumber < 1) {
+                document.getElementById('errorMessage').textContent = "Number of qubits must be a positive integer.";
+                return;
+            }
+
+            const layers = document.querySelectorAll('#layers .layer');
+            const data = {
+                qubitNumber,
+                layers: []
+            };
+
+            let isValid = true;
+
+            layers.forEach(layer => {
+                const gate = layer.querySelector('.gateSelect').value;
+
+                if (gate === "CNOT") {
+                    const controlQubit = parseInt(layer.querySelector('.controlQubitInput').value);
+                    const targetQubit = parseInt(layer.querySelector('.targetQubitInput').value);
+
+                    if (isNaN(controlQubit) || isNaN(targetQubit)) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = "Please enter valid qubit indices for the CNOT gate.";
+                    } else if (controlQubit < 0 || controlQubit >= qubitNumber || targetQubit < 0 || targetQubit >= qubitNumber) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = `Invalid qubit indices for CNOT gate. Valid range: 0 to ${qubitNumber - 1}`;
+                    } else {
+                        data.layers.push({ gate, controlQubit, targetQubit });
+                    }
+                } else if (gate === "SWAP") {
+                    const qubit1 = parseInt(layer.querySelector('.qubit1Input').value);
+                    const qubit2 = parseInt(layer.querySelector('.qubit2Input').value);
+
+                    if (isNaN(qubit1) || isNaN(qubit2)) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = "Please enter valid qubit indices for the SWAP gate.";
+                    } else if (qubit1 < 0 || qubit1 >= qubitNumber || qubit2 < 0 || qubit2 >= qubitNumber) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = `Invalid qubit indices for SWAP gate. Valid range: 0 to ${qubitNumber - 1}`;
+                    } else {
+                        data.layers.push({ gate, qubit1, qubit2 });
+                    }
+                } else if (gate === "CZ") {
+                    const czSelection = layer.querySelector('.czSelection');
+                    if (!czSelection) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = "CZ gate inputs not found.";
+                        return;
+                    }
+                    const controlQubitInput = czSelection.querySelector('.controlQubitInput');
+                    const targetQubitInput = czSelection.querySelector('.targetQubitInput');
+
+                    const controlQubit = parseInt(controlQubitInput.value);
+                    const targetQubit = parseInt(targetQubitInput.value);
+
+                    if (isNaN(controlQubit) || isNaN(targetQubit)) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = "Please enter valid qubit indices for the CZ gate.";
+                    } else if (controlQubit < 0 || controlQubit >= qubitNumber || targetQubit < 0 || targetQubit >= qubitNumber) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = `Invalid qubit indices for CZ gate. Valid range: 0 to ${qubitNumber - 1}`;
+                    } else {
+                        data.layers.push({ gate, controlQubit, targetQubit });
+                    }
+                } else if (gate === "MEASURE") {
+                    const measureSelection = layer.querySelector('.measureSelection');
+                    if (!measureSelection) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = "Measurement gate input not found.";
+                        return;
+                    }
+                    const qubitInput =measureSelection.querySelector('.qubitInput');
+                    const qubit = parseInt(qubitInput.value);
+
+                    if (isNaN(qubit)) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = "Please enter a valid qubit index for the Measurement gate.";
+                    } else if (qubit < 0 || qubit >= qubitNumber) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = `Invalid qubit index for Measurement gate. Valid range: 0 to ${qubitNumber - 1}`;
+                    } else {
+                        data.layers.push({ gate, qubit });
+                    }
+                } else {
+                    // Single-qubit gates (X, Y, Z, H)
+                    const qubit = parseInt(layer.querySelector('.qubitInput').value);
+
+                    if (isNaN(qubit)) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = `Please enter a valid qubit index for the ${gate} gate.`;
+                    } else if (qubit < 0 || qubit >= qubitNumber) {
+                        isValid = false;
+                        document.getElementById('errorMessage').textContent = `Invalid qubit index for ${gate} gate. Valid range: 0 to ${qubitNumber - 1}`;
+                    } else {
+                        data.layers.push({ gate, qubit });
+                    }
+                }
+            });
+
+            console.log("Validation Check:", isValid);
+            if (!isValid) {
+                return;
+            }
+
+            // Log the form data being sent to the backend
+            console.log("Form Data Sent:", JSON.stringify(data, null, 2));
+
+            try {
+                const response = await fetch('/generate_circuit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const imgURL = URL.createObjectURL(blob);
+
+                    document.getElementById("circuitImage")?.remove();
+                    document.getElementById("downloadButton")?.remove();
+
+                    const img = document.createElement("img");
+                    img.id = "circuitImage";
+                    img.src = imgURL;
+                    img.style.maxWidth = "100%";
+                    document.body.appendChild(img);
+
+                    const downloadBtn = document.createElement("a");
+                    downloadBtn.id = "downloadButton";
+                    downloadBtn.href = imgURL;
+                    downloadBtn.download = "quantum_circuit.jpg";
+                    downloadBtn.innerHTML = `<button>Download JPEG</button>`;
+                    document.body.appendChild(downloadBtn);
+                } else {
+                    const errorData = await response.json();
+                    document.getElementById('errorMessage').textContent = `Error: ${errorData.error || "Failed to generate circuit!"}`;
+                }
+            } catch (error) {
+                document.getElementById('errorMessage').textContent = `Error: ${error.message || "An unexpected error occurred."}`;
+            }
+        };
+    </script>
+</body>
+</html>
